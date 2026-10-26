@@ -8,11 +8,15 @@ import { createInterface } from 'node:readline/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const LOGIN_URL = 'https://pms.daoyoudao.com/api.php/v2/users/login';
+const FILES_URL = 'https://pms.daoyoudao.com/api.php/v2/files';
+const TASKS_URL = 'https://pms.daoyoudao.com/api.php/v2/tasks';
 const SERVER_URL = 'https://pms.daoyoudao.com/zentao/mcp';
 const SERVER_NAME = 'zentao';
 const KEYCHAIN_SERVICE = 'mcp-token-renewal.zentao';
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const CREDENTIAL_PATH = path.join(os.homedir(), 'Library/Application Support/McpTokenRenewal/zentao/credentials.json');
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+const DOCUMENT_EXTENSIONS = new Set(['.doc', '.docx', '.md', '.odt', '.pdf', '.rtf', '.txt', '.xls', '.xlsx', '.ppt', '.pptx']);
 
 export function shellQuote(value) {
   return `'${value.replaceAll("'", "'\\''")}'`;
@@ -211,11 +215,113 @@ function requestToken(account, password) {
 }
 
 async function getHeaders() {
+  const token = await getToken();
+  process.stdout.write(`${JSON.stringify({ token })}\n`);
+}
+
+async function getToken() {
+  const credential = await readCredential();
+  const password = runSecurity(['find-generic-password', '-s', KEYCHAIN_SERVICE, '-a', credential.credential_id, '-w']);
+  if (!password) throw new Error('macOS Keychain credential unavailable.');
+  return requestToken(credential.account, password);
+}
+
+export async function validateTaskAttachment(filePath, taskID) {
+  if (!/^\d+$/.test(String(taskID)) || Number(taskID) <= 0) throw new Error('Task ID must be a positive integer.');
+  const extension = path.extname(filePath).toLowerCase();
+  if (!DOCUMENT_EXTENSIONS.has(extension)) throw new Error('Unsupported requirement document type.');
+  const info = await fs.lstat(filePath);
+  if (!info.isFile()) throw new Error('Attachment path must be a regular file.');
+  if (info.size <= 0) throw new Error('Attachment file is empty.');
+  if (info.size > MAX_UPLOAD_BYTES) throw new Error('Attachment exceeds the 50 MiB local safety limit.');
+  return { name: path.basename(filePath), size: info.size };
+}
+
+function parseJson(text) {
+  try { return JSON.parse(text); }
+  catch { throw new Error('ZenTao returned an invalid response.'); }
+}
+
+function readTaskFiles(task) {
+  return task?.files ?? task?.task?.files ?? task?.data?.files ?? null;
+}
+
+export function attachmentMatches(files, name, size) {
+  if (!Array.isArray(files)) return false;
+  return files.some(file => {
+    const fileName = file.title ?? file.name ?? file.fileName ?? file.filename;
+    const fileSize = Number(file.size ?? file.filesize ?? file.fileSize);
+    return fileName === name && Number.isFinite(fileSize) && fileSize === size;
+  });
+}
+
+export function createTaskAttachmentForm(fileBytes, fileName, taskID) {
+  if (!/^\d+$/.test(String(taskID)) || Number(taskID) <= 0) throw new Error('Task ID must be a positive integer.');
+  const body = new FormData();
+  body.append('file', new Blob([fileBytes]), fileName);
+  body.append('objectType', 'task');
+  body.append('objectID', String(taskID));
+  return body;
+}
+
+export async function uploadTaskAttachmentWithToken(fileBytes, attachment, taskID, token, fetchImpl = fetch) {
+  const body = createTaskAttachmentForm(fileBytes, attachment.name, taskID);
+  let upload;
+  try {
+    upload = await fetchImpl(FILES_URL, {
+      method: 'POST',
+      headers: { token },
+      body,
+      redirect: 'manual',
+      signal: AbortSignal.timeout(30000),
+    });
+  } catch {
+    const task = await readTaskAttachmentState(taskID, token, fetchImpl);
+    if (attachmentMatches(readTaskFiles(task), attachment.name, attachment.size)) {
+      return { status: 'success', verified: true, fileName: attachment.name, taskID: Number(taskID), recoveredAfterTimeout: true };
+    }
+    return { status: 'unknown', verified: false, retrySafe: false, fileName: attachment.name, taskID: Number(taskID) };
+  }
+
+  if (upload.status >= 300 && upload.status < 400) throw new Error('ZenTao upload redirected the credentialed request; upload was stopped.');
+  if (upload.status < 200 || upload.status >= 300) throw new Error(`ZenTao rejected the attachment upload (HTTP ${upload.status}).`);
+  const result = parseJson(await upload.text());
+  if (result.status !== 'success' || !Number.isInteger(Number(result.id)) || Number(result.id) <= 0) {
+    throw new Error('ZenTao did not confirm attachment upload.');
+  }
+
+  const task = await readTaskAttachmentState(taskID, token, fetchImpl);
+  const verified = attachmentMatches(readTaskFiles(task), attachment.name, attachment.size);
+  return { status: 'success', verified, fileID: Number(result.id), fileName: attachment.name, taskID: Number(taskID) };
+}
+
+async function readTaskAttachmentState(taskID, token, fetchImpl) {
+  try {
+    const response = await fetchImpl(`${TASKS_URL}/${encodeURIComponent(taskID)}`, {
+      method: 'GET',
+      headers: { token },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(10000),
+    });
+    if (response.status < 200 || response.status >= 300 || new URL(response.url).origin !== new URL(TASKS_URL).origin) return null;
+    return parseJson(await response.text());
+  } catch { return null; }
+}
+
+export async function uploadTaskAttachment(filePath, taskID, { fetchImpl = fetch } = {}) {
+  const attachment = await validateTaskAttachment(filePath, taskID);
   const credential = await readCredential();
   const password = runSecurity(['find-generic-password', '-s', KEYCHAIN_SERVICE, '-a', credential.credential_id, '-w']);
   if (!password) throw new Error('macOS Keychain credential unavailable.');
   const token = await requestToken(credential.account, password);
-  process.stdout.write(`${JSON.stringify({ token })}\n`);
+  const file = await fs.readFile(filePath);
+  if (file.byteLength !== attachment.size) throw new Error('Attachment changed while it was being read; upload was stopped.');
+  return uploadTaskAttachmentWithToken(file, attachment, taskID, token, fetchImpl);
+}
+
+async function showAccount() {
+  const credential = await readCredential();
+  process.stdout.write(`${JSON.stringify({ account: credential.account })}\n`);
 }
 
 async function removeCredentials() {
@@ -272,8 +378,17 @@ export async function configureMacOS() {
 export async function runMacOSCommand(command) {
   if (process.platform !== 'darwin') throw new Error('This command is for macOS.');
   if (command === 'headers') return getHeaders();
+  if (command === 'account') return showAccount();
   if (command === 'remove') return removeCredentials();
-  throw new Error('Use the setup entry point, or specify headers/remove.');
+  if (command === 'upload') {
+    const filePath = process.argv[3];
+    const taskID = process.argv[4];
+    if (!filePath || !taskID) throw new Error('Use upload <document-path> <task-id>.');
+    const result = await uploadTaskAttachment(filePath, taskID);
+    process.stdout.write(`${JSON.stringify(result)}\n`);
+    return;
+  }
+  throw new Error('Use the setup entry point, or specify headers/account/remove/upload.');
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

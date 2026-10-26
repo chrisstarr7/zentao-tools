@@ -47,6 +47,31 @@ try {
     $env:USERPROFILE = $tempRoot
     $env:HOME = $tempRoot
     $env:LOCALAPPDATA = Join-Path $tempRoot 'LocalAppData'
+    . (Join-Path $repoRoot 'scripts/zentao/upload-validation.ps1')
+    $attachmentPath = Join-Path $tempRoot 'requirement.docx'
+    [IO.File]::WriteAllText($attachmentPath, 'test requirement')
+    $validatedAttachment = Get-MtrValidatedAttachment $attachmentPath 123
+    Assert-True ($validatedAttachment.Name -eq 'requirement.docx') 'Attachment validation changed the source file name.'
+    $invalidAttachment = Join-Path $tempRoot 'unrelated.exe'
+    [IO.File]::WriteAllText($invalidAttachment, 'not a document')
+    $unsupportedAttachmentRejected = $false
+    try { Get-MtrValidatedAttachment $invalidAttachment 123 | Out-Null } catch { $unsupportedAttachmentRejected = $true }
+    Assert-True $unsupportedAttachmentRejected 'Attachment validation accepted an unsupported file type.'
+    $emptyAttachment = Join-Path $tempRoot 'empty.pdf'
+    [IO.File]::WriteAllBytes($emptyAttachment, [byte[]]@())
+    $emptyAttachmentRejected = $false
+    try { Get-MtrValidatedAttachment $emptyAttachment 123 | Out-Null } catch { $emptyAttachmentRejected = $true }
+    Assert-True $emptyAttachmentRejected 'Attachment validation accepted an empty file.'
+    $oversizedAttachment = Join-Path $tempRoot 'large.pdf'
+    $largeStream = [IO.File]::Open($oversizedAttachment, [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    try { $largeStream.SetLength(50MB + 1) } finally { $largeStream.Dispose() }
+    $oversizedAttachmentRejected = $false
+    try { Get-MtrValidatedAttachment $oversizedAttachment 123 | Out-Null } catch { $oversizedAttachmentRejected = $true }
+    Assert-True $oversizedAttachmentRejected 'Attachment validation accepted a file over the local safety cap.'
+    $invalidTaskRejected = $false
+    try { Get-MtrValidatedAttachment $attachmentPath 0 | Out-Null } catch { $invalidTaskRejected = $true }
+    Assert-True $invalidTaskRejected 'Attachment validation accepted an invalid task ID.'
+
     $null = New-Item -ItemType Directory -Path (Join-Path $tempRoot '.codex')
     . (Join-Path $repoRoot 'scripts/zentao/configure.ps1')
 

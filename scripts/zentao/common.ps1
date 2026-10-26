@@ -65,9 +65,79 @@ function Get-MtrLoginUri {
     return 'https://pms.daoyoudao.com/api.php/v2/users/login'
 }
 
+function Get-MtrApiBaseUri {
+    return 'https://pms.daoyoudao.com/api.php/v2'
+}
+
 function Import-MtrSecurityModule {
     if ((Get-MtrPlatform) -eq 'Windows' -and -not (Get-Command ConvertTo-SecureString -ErrorAction SilentlyContinue)) {
         $manifest = Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Security/Microsoft.PowerShell.Security.psd1'
         Import-Module -Name $manifest -ErrorAction Stop
+    }
+}
+
+function Get-MtrStoredCredential {
+    $credentialPath = Get-MtrCredentialPath
+    if (-not (Test-Path -LiteralPath $credentialPath -PathType Leaf)) { throw 'ZenTao credential metadata is unavailable.' }
+    try { $credential = Get-Content -LiteralPath $credentialPath -Raw | ConvertFrom-Json }
+    catch { throw 'ZenTao credential metadata is invalid.' }
+    if ([string]::IsNullOrWhiteSpace([string]$credential.account)) { throw 'ZenTao credential metadata is incomplete.' }
+    if ((Get-MtrPlatform) -eq 'Windows' -and [string]::IsNullOrWhiteSpace([string]$credential.password_protected)) {
+        throw 'ZenTao credential metadata is incomplete.'
+    }
+    if ((Get-MtrPlatform) -eq 'macOS' -and [string]::IsNullOrWhiteSpace([string]$credential.credential_id)) {
+        throw 'ZenTao credential metadata is incomplete.'
+    }
+    return $credential
+}
+
+function Get-MtrStoredPassword([psobject]$Credential) {
+    $platform = Get-MtrPlatform
+    Import-MtrSecurityModule
+    if ($platform -eq 'Windows') {
+        $securePassword = ConvertTo-SecureString ([string]$Credential.password_protected)
+        $passwordPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword)
+        try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($passwordPointer) }
+        finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($passwordPointer) }
+    }
+    $security = Get-MtrSecurityCommand
+    $password = [string](& $security find-generic-password -s (Get-MtrCredentialService) -a ([string]$Credential.credential_id) -w 2>$null)
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($password)) { throw 'macOS Keychain credential unavailable.' }
+    return $password
+}
+
+function Get-MtrAccessToken {
+    $credential = Get-MtrStoredCredential
+    $password = Get-MtrStoredPassword $credential
+    $client = $null
+    $handler = $null
+    $content = $null
+    $httpResponse = $null
+    $body = $null
+    $responseJson = $null
+    try {
+        Add-Type -AssemblyName System.Net.Http
+        $handler = [System.Net.Http.HttpClientHandler]::new()
+        $handler.AllowAutoRedirect = $false
+        $client = [System.Net.Http.HttpClient]::new($handler)
+        $client.Timeout = [TimeSpan]::FromSeconds(7)
+        $body = @{ account = [string]$credential.account; password = $password } | ConvertTo-Json -Compress
+        $content = [System.Net.Http.StringContent]::new($body, [Text.Encoding]::UTF8, 'application/json')
+        $httpResponse = $client.PostAsync((Get-MtrLoginUri), $content).GetAwaiter().GetResult()
+        if (-not $httpResponse.IsSuccessStatusCode) { throw 'login request rejected' }
+        $responseJson = $httpResponse.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+        $response = $responseJson | ConvertFrom-Json
+        if ($response.status -ne 'success' -or [string]::IsNullOrWhiteSpace([string]$response.token)) { throw 'login rejected' }
+        return [string]$response.token
+    }
+    finally {
+        $password = $null
+        $body = $null
+        $responseJson = $null
+        $credential = $null
+        if ($content) { $content.Dispose() }
+        if ($httpResponse) { $httpResponse.Dispose() }
+        if ($client) { $client.Dispose() }
+        if ($handler) { $handler.Dispose() }
     }
 }
