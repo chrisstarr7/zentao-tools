@@ -10,8 +10,8 @@ Use this template for a clearly requested new development task. Keep the task li
 - **Story:** the real ZenTao story ID when one is matched. Do not manufacture an ID or link an unrelated story.
 - **Assignee:** the verified current authenticated user's ZenTao display name/account. Do not infer it from the workstation username or an unverified “assigned to me” filter.
 - **Priority:** 3 unless the user or project rules specify otherwise.
-- **Estimate and time interval:** use hours explicitly supplied by the user; never estimate effort from task size. Before calculating, use a work schedule already provided in this conversation or saved in the user's calendar config. If neither exists, ask for shift start/end and break start/end. Round current Beijing time down to the whole hour as the interval end, then count the requested work hours backwards while skipping configured breaks. Confirm the resulting interval with the user if the work schedule is ambiguous or the duration cannot fit today.
-- **Start and deadline:** retain the actual date; calculate the time interval with `scripts/zentao/work-calendar.mjs --hours <hours> --interval` and the date with the same script's normal mode. If MCP/API fields accept dates only, write date-only values there and put the precise estimated interval in the structured description. Do not claim ZenTao stored clock-time precision.
+- **Estimate and time interval:** use hours explicitly supplied by the user; never estimate effort from task size. Before calculating, use a work schedule already provided in this conversation or saved in the user's calendar config. If neither exists, ask for shift start/end and break start/end. Round current Beijing time down to the whole hour as the interval end, then count the requested work hours backwards while skipping configured breaks. If the start passes before shift start, continue from the previous configured workday, skipping weekends and configured holidays; retain each day's separate work segment in the description.
+- **Start and deadline:** use the interval's first and last work dates; calculate with `scripts/zentao/work-calendar.mjs --hours <hours> --interval`. If MCP/API fields accept dates only, write the first/last date there and put each precise estimated segment in the structured description. Do not claim ZenTao stored clock-time precision.
 - **Attachment:** attach only the actual requirement document the user identified. If it is absent, inaccessible, unsupported, or upload cannot be verified, report that fact. Do not silently attach a different file.
 
 ## Structured requirement description
@@ -35,7 +35,7 @@ Do not write the description as one free-form paragraph. Summarize the requireme
 - 包含：<work owned by this task>
 - 不包含：<related work outside this task, only when needed to avoid scope ambiguity>
 
-预计安排：<YYYY-MM-DD HH:mm–HH:mm, Asia/Shanghai; include break skipped if crossed>
+预计安排：<YYYY-MM-DD HH:mm–HH:mm, Asia/Shanghai; list each workday segment separately across breaks/days>
 
 验收标准：
 - <observable result grounded in the requirement>

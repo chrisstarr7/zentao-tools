@@ -58,13 +58,25 @@ test('uses the supplied time zone when deriving today', () => {
 
 test('rounds the Beijing time down to the hour and skips lunch when counting backwards', () => {
   assert.deepEqual(calculateWorkInterval({ hours: 3, endTime: '14:11', calendar: shiftCalendar }), {
-    startTime: '09:30', endTime: '14:00', hours: 3,
+    startDate: '2026-10-30', startTime: '09:30', endDate: '2026-10-30', endTime: '14:00', hours: 3,
+    segments: [{ date: '2026-10-30', startTime: '09:30', endTime: '12:00' }, { date: '2026-10-30', startTime: '13:30', endTime: '14:00' }],
   });
 });
 
-test('uses Beijing time, requires configured working hours, and rejects estimates outside the shift', () => {
+test('uses Beijing time and rolls estimates into previous configured workdays', () => {
   const now = new Date('2026-10-30T06:11:00Z');
   assert.equal(calculateWorkInterval({ hours: 3, now, calendar: shiftCalendar }).endTime, '14:00');
   assert.throws(() => calculateWorkInterval({ hours: 1, endTime: '14:00' }), /Configure working hours/);
-  assert.throws(() => calculateWorkInterval({ hours: 10, endTime: '14:00', calendar: shiftCalendar }), /does not fit/);
+  assert.deepEqual(calculateWorkInterval({ hours: 4, endDate: '2026-10-30', endTime: '14:00', calendar: shiftCalendar }), {
+    startDate: '2026-10-29', startTime: '18:00', endDate: '2026-10-30', endTime: '14:00', hours: 4,
+    segments: [
+      { date: '2026-10-29', startTime: '18:00', endTime: '18:30' },
+      { date: '2026-10-30', startTime: '09:00', endTime: '12:00' },
+      { date: '2026-10-30', startTime: '13:30', endTime: '14:00' },
+    ],
+  });
+  const weekend = calculateWorkInterval({ hours: 4, endDate: '2026-11-02', endTime: '14:11', calendar: shiftCalendar });
+  assert.equal(weekend.startDate, '2026-10-30');
+  assert.equal(weekend.startTime, '18:00');
+  assert.equal(weekend.segments.length, 3);
 });

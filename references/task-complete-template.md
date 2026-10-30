@@ -19,7 +19,7 @@ Recommended comment:
 实际完成内容：
 - <delivered item>
 - <delivered item>
-实际工作时间：<YYYY-MM-DD HH:mm–HH:mm, Asia/Shanghai>
+实际工作时间：<each YYYY-MM-DD HH:mm–HH:mm segment, Asia/Shanghai>
 本次实际耗时：<hours>
 验证结果：
 - <check performed and its result; mark anything not run as unverified>

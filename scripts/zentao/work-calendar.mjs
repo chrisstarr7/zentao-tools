@@ -61,7 +61,7 @@ export function currentTimeInTimeZone(now = new Date(), timeZone = DEFAULT_WORK_
   return `${values.hour}:${values.minute}`;
 }
 
-export function calculateWorkInterval({ hours, endTime, now = new Date(), calendar = DEFAULT_WORK_CALENDAR }) {
+export function calculateWorkInterval({ hours, endTime, endDate, now = new Date(), calendar = DEFAULT_WORK_CALENDAR }) {
   if (typeof hours !== 'number' || !Number.isFinite(hours) || hours <= 0) throw new Error('Estimated hours must be a positive number.');
   const window = calendar.workWindow;
   if (!window) throw new Error('Configure working hours and break times before calculating an estimated time interval.');
@@ -73,21 +73,46 @@ export function calculateWorkInterval({ hours, endTime, now = new Date(), calend
     throw new Error('Work hours and break times must be ordered within the same day.');
   }
 
+  const holidays = new Set(calendar.holidays);
+  const makeupDays = new Set(calendar.makeupWorkdays);
+  let date = parseDate(endDate ?? todayInTimeZone(now, calendar.timeZone));
   let cursor = Math.floor(timeMinutes(endTime ?? currentTimeInTimeZone(now, calendar.timeZone)) / 60) * 60;
-  if (cursor > shiftEnd || cursor < shiftStart) throw new Error('Current time is outside the configured work shift.');
+  if (cursor > shiftEnd) throw new Error('Current time is outside the configured work shift.');
+  if (!isWorkday(date, calendar, holidays, makeupDays)) {
+    do { date = addDays(date, -1); }
+    while (!isWorkday(date, calendar, holidays, makeupDays));
+    cursor = shiftEnd;
+  }
   if (cursor > breakStart && cursor < breakEnd) cursor = breakStart;
-  const end = cursor;
+  const actualEndDate = dateString(date);
+  const actualEndTime = formatMinutes(cursor);
   let remaining = hours * 60;
+  const segments = [];
   while (remaining > 0) {
     if (cursor > breakStart && cursor <= breakEnd) cursor = breakStart;
     const available = cursor > breakEnd ? cursor - breakEnd : cursor - shiftStart;
-    if (available <= 0) throw new Error('The requested estimate does not fit in the remaining work time today.');
+    if (available <= 0) {
+      do { date = addDays(date, -1); }
+      while (!isWorkday(date, calendar, holidays, makeupDays));
+      cursor = shiftEnd;
+      continue;
+    }
     const used = Math.min(remaining, available);
+    const segmentEnd = cursor;
     cursor -= used;
+    segments.push({ date: dateString(date), startTime: formatMinutes(cursor), endTime: formatMinutes(segmentEnd) });
     remaining -= used;
   }
+  segments.reverse();
 
-  return { startTime: formatMinutes(cursor), endTime: formatMinutes(end), hours };
+  return {
+    startDate: segments[0].date,
+    startTime: segments[0].startTime,
+    endDate: actualEndDate,
+    endTime: actualEndTime,
+    hours,
+    segments,
+  };
 }
 
 function validateCalendar(calendar) {
@@ -199,7 +224,7 @@ async function main(argv) {
   const calendar = await loadWorkCalendar(options.config);
   if (options.interval) {
     const now = new Date();
-    process.stdout.write(`${JSON.stringify({ date: todayInTimeZone(now, calendar.timeZone), ...calculateWorkInterval({ hours: options.hours, now, calendar }) })}\n`);
+    process.stdout.write(`${JSON.stringify(calculateWorkInterval({ hours: options.hours, now, calendar }))}\n`);
     return;
   }
   process.stdout.write(`${JSON.stringify(calculateSchedule({
