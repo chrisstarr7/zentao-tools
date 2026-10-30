@@ -4,23 +4,24 @@ Use this template for a clearly requested new development task. Keep the task li
 
 ## Required fields
 
-- **Name:** Summarize as one sentence from `<requirement/task name> + <the actual work in this task>`. Be specific and concise; avoid generic titles such as “related development”.
-- **Execution:** use the confirmed execution associated with the requirement. If more than one remains plausible, show 3–5 candidates and ask the user to choose.
-- **Type:** `devel` (ZenTao API V2 development task).
-- **Story:** the real ZenTao story ID when one is matched. Do not manufacture an ID or link an unrelated story.
-- **Assignee:** the verified current authenticated user's ZenTao display name/account. Do not infer it from the workstation username or an unverified “assigned to me” filter.
-- **Priority:** 3 unless the user or project rules specify otherwise.
-- **Estimate and time interval:** use hours explicitly supplied by the user; never estimate effort from task size. Before calculating, use a work schedule already provided in this conversation or saved in the user's calendar config. If neither exists, ask for shift start/end and break start/end. Round current Beijing time down to the whole hour as the interval end, then count the requested work hours backwards while skipping configured breaks. If the start passes before shift start, continue from the previous configured workday, skipping weekends and configured holidays; retain each day's separate work segment in the description.
-- **Start and deadline:** use the interval's first and last work dates; calculate with `scripts/zentao/work-calendar.mjs --hours <hours> --interval`. If MCP/API fields accept dates only, write the first/last date there and put each precise estimated segment in the structured description. Do not claim ZenTao stored clock-time precision.
-- **Attachment:** attach only the actual requirement document the user identified. If it is absent, inaccessible, unsupported, or upload cannot be verified, report that fact. Do not silently attach a different file.
+- **Execution (`executionID`):** select the confirmed execution associated with the requirement. If more than one remains plausible, show 3–5 candidates and ask the user to choose.
+- **Module (`module`):** use the matched module. When no narrower module applies and the form shows the root `/` module, pass `0` (the value used for root-module tasks in the connected instance); do not omit a field just because it appears optional in the MCP schema.
+- **Type (`type`):** `devel` (ZenTao API V2 development task).
+- **Story (`story`):** pass the real matched ZenTao story ID. Otherwise omit it; never manufacture an ID or link an unrelated story.
+- **Assignee (`assignedTo`):** pass the verified current authenticated user's ZenTao account. Do not infer it from the workstation username or an unverified “assigned to me” filter.
+- **Name (`name`):** summarize `<requirement/task name> + <actual work in this task>` as one concise sentence; avoid generic titles.
+- **Priority (`pri`):** 3 unless the user or project rules specify otherwise.
+- **Estimate (`estimate`):** use hours explicitly supplied by the user; never estimate effort from task size. Before calculating the interval, use a work schedule already provided in this conversation or saved in the user's calendar config. If neither exists, ask for shift start/end and break start/end. Round current Beijing time down to the whole hour as the interval end, then count the requested work hours backwards while skipping configured breaks. If the start passes before shift start, continue from the previous configured workday, skipping weekends and configured holidays. Calculate with `scripts/zentao/work-calendar.mjs --hours <hours> --interval`.
+- **Planned dates (`estStarted`, `deadline`):** set these native MCP fields to the first and last work dates. The connected task API stores dates, estimate hours, and the requirement description in separate fields. Do not repeat type, assignee, estimate, date, or priority in the description.
+- **Exact time segments:** the connected create schema has no clock-time schedule field. When the user requires a calculated interval, preserve only each exact work segment (date and clock times) in a short `预计时段（MCP 日期字段不含时分）` note in the description; do not repeat the overall date range or total estimate. Do not claim ZenTao stored clock-time precision.
+- **Parent task:** the connected MCP create/update schema currently exposes no parent-task field. Do not put a parent ID or label into `desc` as a substitute; report the limitation if a parent task is required.
+- **Attachment:** the connected create schema has no attachment field. Attach only the actual requirement document the user identified using the supported post-create upload flow. If it is absent, inaccessible, unsupported, or upload cannot be verified, report that fact. Do not silently attach a different file.
 
-## Structured requirement description
+## Description field
 
-Do not write the description as one free-form paragraph. Summarize the requirement document and relevant current conversation in this structure, omitting a section only when its facts are unavailable:
+Use `desc` only for requirement and implementation content; map all other data to the matching native fields above. Summarize the requirement document and relevant current conversation in this structure, omitting a section only when its facts are unavailable:
 
 ```text
-需求名称：<confirmed requirement/story name and ID if available>
-
 需求背景：
 <problem to solve, intended user/business outcome, and source document>
 
@@ -35,8 +36,6 @@ Do not write the description as one free-form paragraph. Summarize the requireme
 - 包含：<work owned by this task>
 - 不包含：<related work outside this task, only when needed to avoid scope ambiguity>
 
-预计安排：<YYYY-MM-DD HH:mm–HH:mm, Asia/Shanghai; list each workday segment separately across breaks/days>
-
 验收标准：
 - <observable result grounded in the requirement>
 - <observable result grounded in the current request>
@@ -44,6 +43,8 @@ Do not write the description as one free-form paragraph. Summarize the requireme
 依赖与约束：
 - <confirmed dependency, limit, or “暂无已知依赖”>
 ```
+
+If exact clock-time intervals are required but the MCP only accepts date-level planned fields, append only those intervals in the separate short note specified above. Keep the estimated hours and overall first/last dates exclusively in `estimate`, `estStarted`, and `deadline`.
 
 Summarize the requirement document and relevant current-chat messages to the level of a concise implementation requirement. Do not paste a whole PRD, include unrelated debugging logs, or invent implementation details, interfaces, dependencies, or verification results. Preserve uncertainty as an open question rather than turning it into a requirement. Keep task type `devel`; assign it to the verified current login user.
 

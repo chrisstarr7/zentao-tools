@@ -4,7 +4,7 @@
 
 Before a task workflow, inspect available ZenTao tool names and their input/output schemas. The live MCP may be older or narrower than ZenTao's current API documentation. Do not assume that a documented endpoint is exposed, that an optional response field is actually returned, or that an enum is accepted by the company instance.
 
-The task flow needs a way to read executions, tasks, stories, and task details, plus create/finish operations. Current task-create/finish schemas commonly accept date-only fields and `currentConsumed`; pass only fields the current schema exposes. If the detail tool omits needed fields, use a suitable task-list result or stop rather than fabricating state.
+The task flow needs a way to read executions, tasks, stories, and task details, plus create/finish operations. Map creation values to the live schema's native fields (`executionID`, `module`, `story`, `type`, `assignedTo`, `name`, `pri`, `estimate`, `estStarted`, `deadline`) and finish values to `realStarted`, `finishedDate`, and `currentConsumed`. Inspect the actual field semantics and read-back precision; a string type alone does not prove clock-time precision. If the schema omits a needed field such as parent task, do not put it into `desc` as a substitute. If the detail tool omits needed fields, use a suitable task-list result or stop rather than fabricating state.
 
 ## Attachment upload
 

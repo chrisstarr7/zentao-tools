@@ -11,22 +11,20 @@ Use this before marking an existing task complete. Completion is a business writ
 
 ## Structured completion record
 
+Map actual dates and hours to the finish operation's native fields: `realStarted`, `finishedDate`, and `currentConsumed`. Use exact date-time values when the live API accepts them; otherwise pass its supported date format. `currentConsumed` is this completion's actual hours, not the planned estimate. Do not send a cumulative `consumed` value as well unless the live API explicitly requires it. The comment is for the outcome, verification, and follow-up only; do not copy task metadata into it.
+
 Recommended comment:
 
 ```text
-任务名称：<confirmed task name and ID>
-需求背景：<requirement/story this task implements>
 实际完成内容：
 - <delivered item>
 - <delivered item>
-实际工作时间：<each YYYY-MM-DD HH:mm–HH:mm segment, Asia/Shanghai>
-本次实际耗时：<hours>
 验证结果：
 - <check performed and its result; mark anything not run as unverified>
 遗留问题：<known follow-up, or omit if none>
 ```
 
-If the user confirms completion exactly matches the estimate, the planned time interval and estimate may populate the actual-time and actual-hours fields. Otherwise never make them equal just for convenience. If the active MCP/API schema accepts only dates, send date-only values to those fields and preserve exact times in the structured completion record. Do not claim ZenTao stored hour/minute precision. `currentConsumed` is the actual duration in hours; never infer it from the estimate alone.
+When work happened in multiple non-contiguous intervals, include only the actual interval segments in the comment if the native start/finish fields cannot represent those breaks. Otherwise keep times and hours in their native fields and omit duplicate metadata from the comment. Use estimated dates/hours as actual values only when the user confirms the work followed the estimate and completed as planned. Never copy planned values merely to make actuals match; never infer actual hours from the estimate alone.
 
 ## Write and verify
 
