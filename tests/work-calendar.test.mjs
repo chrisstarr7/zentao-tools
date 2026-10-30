@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { calculateSchedule, DEFAULT_WORK_CALENDAR, todayInTimeZone } from '../scripts/zentao/work-calendar.mjs';
+import { calculateSchedule, calculateWorkInterval, DEFAULT_WORK_CALENDAR, todayInTimeZone } from '../scripts/zentao/work-calendar.mjs';
+
+const shiftCalendar = { ...DEFAULT_WORK_CALENDAR, workWindow: { start: '09:00', breakStart: '12:00', breakEnd: '13:30', end: '18:30' } };
 
 test('calculates 16 hours from Friday across a weekend and month boundary', () => {
   assert.deepEqual(calculateSchedule({ hours: 16, startDate: '2026-10-30' }), {
@@ -52,4 +54,17 @@ test('rejects conflicting holiday and makeup-workday overrides', () => {
 
 test('uses the supplied time zone when deriving today', () => {
   assert.equal(todayInTimeZone(new Date('2026-10-25T17:00:00Z'), 'Asia/Shanghai'), '2026-10-26');
+});
+
+test('rounds the Beijing time down to the hour and skips lunch when counting backwards', () => {
+  assert.deepEqual(calculateWorkInterval({ hours: 3, endTime: '14:11', calendar: shiftCalendar }), {
+    startTime: '09:30', endTime: '14:00', hours: 3,
+  });
+});
+
+test('uses Beijing time, requires configured working hours, and rejects estimates outside the shift', () => {
+  const now = new Date('2026-10-30T06:11:00Z');
+  assert.equal(calculateWorkInterval({ hours: 3, now, calendar: shiftCalendar }).endTime, '14:00');
+  assert.throws(() => calculateWorkInterval({ hours: 1, endTime: '14:00' }), /Configure working hours/);
+  assert.throws(() => calculateWorkInterval({ hours: 10, endTime: '14:00', calendar: shiftCalendar }), /does not fit/);
 });

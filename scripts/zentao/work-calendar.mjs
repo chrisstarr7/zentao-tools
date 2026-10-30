@@ -7,7 +7,7 @@ export const DEFAULT_WORK_CALENDAR = Object.freeze({
   timeZone: 'Asia/Shanghai',
   workingDays: [1, 2, 3, 4, 5],
   dailyCapacityHours: 8,
-  workWindow: { start: '09:00', breakStart: '12:00', breakEnd: '13:30', end: '19:00' },
+  workWindow: null,
   holidays: [],
   makeupWorkdays: [],
 });
@@ -40,6 +40,56 @@ export function todayInTimeZone(now = new Date(), timeZone = DEFAULT_WORK_CALEND
   return `${values.year}-${values.month}-${values.day}`;
 }
 
+function timeMinutes(value) {
+  if (typeof value !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) throw new Error(`Invalid work time: ${value}`);
+  const [hours, minutes] = value.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+function formatMinutes(value) {
+  return `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
+}
+
+export function currentTimeInTimeZone(now = new Date(), timeZone = DEFAULT_WORK_CALENDAR.timeZone) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.hour}:${values.minute}`;
+}
+
+export function calculateWorkInterval({ hours, endTime, now = new Date(), calendar = DEFAULT_WORK_CALENDAR }) {
+  if (typeof hours !== 'number' || !Number.isFinite(hours) || hours <= 0) throw new Error('Estimated hours must be a positive number.');
+  const window = calendar.workWindow;
+  if (!window) throw new Error('Configure working hours and break times before calculating an estimated time interval.');
+  const shiftStart = timeMinutes(window.start);
+  const shiftEnd = timeMinutes(window.end);
+  const breakStart = timeMinutes(window.breakStart);
+  const breakEnd = timeMinutes(window.breakEnd);
+  if (!(shiftStart < breakStart && breakStart < breakEnd && breakEnd < shiftEnd)) {
+    throw new Error('Work hours and break times must be ordered within the same day.');
+  }
+
+  let cursor = Math.floor(timeMinutes(endTime ?? currentTimeInTimeZone(now, calendar.timeZone)) / 60) * 60;
+  if (cursor > shiftEnd || cursor < shiftStart) throw new Error('Current time is outside the configured work shift.');
+  if (cursor > breakStart && cursor < breakEnd) cursor = breakStart;
+  const end = cursor;
+  let remaining = hours * 60;
+  while (remaining > 0) {
+    if (cursor > breakStart && cursor <= breakEnd) cursor = breakStart;
+    const available = cursor > breakEnd ? cursor - breakEnd : cursor - shiftStart;
+    if (available <= 0) throw new Error('The requested estimate does not fit in the remaining work time today.');
+    const used = Math.min(remaining, available);
+    cursor -= used;
+    remaining -= used;
+  }
+
+  return { startTime: formatMinutes(cursor), endTime: formatMinutes(end), hours };
+}
+
 function validateCalendar(calendar) {
   if (!calendar || typeof calendar !== 'object' || Array.isArray(calendar)) throw new Error('Work calendar must be an object.');
   if (typeof calendar.timeZone !== 'string' || !calendar.timeZone) throw new Error('Work calendar timeZone is required.');
@@ -50,6 +100,10 @@ function validateCalendar(calendar) {
   }
   if (!Number.isFinite(calendar.dailyCapacityHours) || calendar.dailyCapacityHours <= 0) {
     throw new Error('dailyCapacityHours must be greater than zero.');
+  }
+  if (calendar.workWindow !== null) {
+    if (!calendar.workWindow || typeof calendar.workWindow !== 'object') throw new Error('workWindow must define start, breakStart, breakEnd, and end.');
+    for (const key of ['start', 'breakStart', 'breakEnd', 'end']) timeMinutes(calendar.workWindow[key]);
   }
   for (const key of ['holidays', 'makeupWorkdays']) {
     if (!Array.isArray(calendar[key])) throw new Error(`${key} must be an array of dates.`);
@@ -130,8 +184,8 @@ function parseArgs(argv) {
   const result = {};
   for (let i = 0; i < argv.length; i++) {
     const [key, inline] = argv[i].replace(/^--/, '').split('=', 2);
-    if (!['hours', 'start', 'deadline', 'today', 'config'].includes(key)) throw new Error(`Unknown option: --${key}`);
-    const value = inline ?? argv[++i];
+    if (!['hours', 'start', 'deadline', 'today', 'config', 'interval'].includes(key)) throw new Error(`Unknown option: --${key}`);
+    const value = key === 'interval' ? true : inline ?? argv[++i];
     if (value === undefined) throw new Error(`Missing value for --${key}`);
     result[key] = value;
   }
@@ -143,6 +197,11 @@ function parseArgs(argv) {
 async function main(argv) {
   const options = parseArgs(argv);
   const calendar = await loadWorkCalendar(options.config);
+  if (options.interval) {
+    const now = new Date();
+    process.stdout.write(`${JSON.stringify({ date: todayInTimeZone(now, calendar.timeZone), ...calculateWorkInterval({ hours: options.hours, now, calendar }) })}\n`);
+    return;
+  }
   process.stdout.write(`${JSON.stringify(calculateSchedule({
     hours: options.hours,
     startDate: options.start,
