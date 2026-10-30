@@ -44,14 +44,12 @@ node "$HOME/.agents/skills/zentao-tools/setup.mjs"
 
 ### OpenCode
 
-OpenCode 不支持本 Skill 使用的命令型 Header Helper。使用已登录的 `zentao-cli` 启动本地 stdio MCP：
+OpenCode 通过 `zentao-cli` 登录并续期 Token。Token 过期后运行 `zentao login`，然后重连 MCP：
 
 ```sh
 opencode mcp add zentao-cli --global -- zentao mcp
 opencode mcp list
 ```
-
-MCP 进程读取 CLI 保存的 Profile，不需要把 Token 写入 OpenCode 配置。首次登录或 Token 过期时运行 `zentao login`，然后重连 MCP。避免使用会将 Token 写入客户端配置的接入方式。
 
 ## 验证连接
 
