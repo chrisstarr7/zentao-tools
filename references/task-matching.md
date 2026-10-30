@@ -19,6 +19,7 @@ Do not treat the `assignedtome` query parameter as proof of identity. Compare re
 ## Locate a task or execution
 
 - If the user supplied a task ID or story ID, start with that exact ID and inspect the returned schema. Avoid broad searches when a direct result is sufficient.
+- For task creation, require the user-provided story ID. Fetch it with `get_stories_storyID`, verify the returned ID/title and that it is not deleted, then pass that exact ID in the create payload's `story` field. If no ID is supplied or the lookup is mismatched, ask/clarify and do not create an unlinked task.
 - For “my current tasks”, enumerate only accessible, non-deleted active executions, page each task list, and filter by the verified account plus `wait`/`doing` status. `assignedtome` may be used as a narrowing hint only after its result is checked against the actual `assignedTo` and `status` fields.
 - Match a new task against the user's project/product, linked story, execution, and request language. A story title is evidence for the requirement; it does not by itself identify the correct execution.
 - Before creation, inspect all relevant pages in the selected execution for an existing open task with the same story and materially similar scope. Do not consider a done/cancelled task a duplicate without comparing the requested scope.
