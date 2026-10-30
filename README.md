@@ -1,37 +1,32 @@
 # ZenTao Tools
 
-ZenTao MCP 认证与任务工作流 Skill，支持 Codex、Claude Code 和 OpenCode。它为客户端提供操作规范，不是独立 MCP 服务。
-
-## 安装
-
-以下命令会将 Skill 安装到当前用户的 Codex、Claude Code 和 OpenCode：
-
-```sh
-npx -y skills add chrisstarr7/zentao-tools -g -a codex claude-code opencode -y
-```
-
-Windows 和 macOS 使用相同命令。`-g` 表示全局安装；Claude Code 在 `skills` CLI 中的 agent ID 是 `claude-code`。安装后重启客户端或新建会话。
-
-### 支持范围
-
-| 客户端 | 接入方式 | Token 过期处理 |
-| --- | --- | --- |
-| Codex | ZenTao MCP 与 Header Helper | 由客户端按其 Header Helper 行为处理；自动重试需结合当前版本和服务端验证 |
-| Claude Code | ZenTao MCP 与 `headersHelper` | 支持 Helper 重试流程；仍取决于服务端返回的认证状态 |
-| OpenCode | `zentao-cli` 本地 stdio MCP | CLI Token 过期后重新登录并重连；不承诺自动续期 |
+ZenTao MCP 认证与任务工作流 Skill，支持 Codex、Claude 和 OpenCode。它为客户端提供操作规范，不是独立 MCP 服务。
 
 ## 环境要求
 
-- Node.js 22.20 或更新版本、Git（用于安装 Skill）
-- Windows PowerShell 5.1，或 macOS 自带的 Keychain 与 `security` 命令
+- Node.js 22.20 或更新版本、Git
+- Windows：PowerShell 5.1
+- macOS：系统自带的 Keychain 和 `security` 命令
 - ZenTao 账号及允许使用 API V2 登录的实例
-- OpenCode 用户还需安装并登录 `zentao-cli`（CLI 本身要求 Node.js 18.14.1 或更新版本）
+- OpenCode：已安装并登录 `zentao-cli`
 
-本仓库配置脚本使用固定的公司 ZenTao 地址，不能直接用于其他实例。
+## 安装
+
+```sh
+npx -y skills add chrisstarr7/zentao-tools -g -a codex
+```
+
+`-g` 表示全局安装。此处以 Codex 为例；安装到其他客户端时，将 `-a` 后的 `codex` 替换为对应客户端标识。Windows 和 macOS 使用相同命令，安装后重启客户端或新建会话。
+
+## 支持范围
+
+Codex、Claude、OpenCode。
 
 ## 连接 ZenTao
 
-### Codex 和 Claude Code
+本仓库配置脚本使用固定的公司 ZenTao 地址，不能直接用于其他实例。
+
+### Codex 和 Claude
 
 Windows：
 
@@ -61,7 +56,7 @@ MCP 进程读取 CLI 保存的 Profile，不需要把 Token 写入 OpenCode 配�
 ## 验证连接
 
 - Codex：运行 `codex mcp list`，再执行只读查询。
-- Claude Code：运行 `claude mcp list`，再在新会话中执行只读查询。
+- Claude：运行 `claude mcp list`，再在新会话中执行只读查询。
 - OpenCode：运行 `opencode mcp list`，再执行只读查询。
 
 不要通过真实任务写入或手动令 Token 过期来测试认证恢复。
