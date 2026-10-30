@@ -4,6 +4,8 @@
 
 Before a task workflow, inspect available ZenTao tool names and their input/output schemas. The live MCP may be older or narrower than ZenTao's current API documentation. Do not assume that a documented endpoint is exposed, that an optional response field is actually returned, or that an enum is accepted by the company instance.
 
+OpenCode may connect through the local `zentao-cli` stdio MCP, whose tool names and arguments differ from the Codex company MCP. Match the required capabilities against the active tool list and use its live schema; do not assume the Codex operation names or payload shapes transfer unchanged.
+
 The task flow needs a way to read executions, tasks, stories, and task details, plus create/finish operations. Map creation values to the live schema's native fields (`executionID`, `module`, `story`, `type`, `assignedTo`, `name`, `pri`, `estimate`, `estStarted`, `deadline`) and finish values to `realStarted`, `finishedDate`, and `currentConsumed`. Inspect the actual field semantics and read-back precision; a string type alone does not prove clock-time precision. If the schema omits a needed field such as parent task, do not put it into `desc` as a substitute. If the detail tool omits needed fields, use a suitable task-list result or stop rather than fabricating state.
 
 ## Attachment upload

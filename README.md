@@ -1,11 +1,11 @@
 # ZenTao Tools
 
-为 Codex、Claude Code 等客户端提供 ZenTao MCP 认证和自然语言任务工作流的 Skill。它复用当前客户端已有的 ZenTao MCP，不是新的 MCP 服务。
+为 Codex、Claude Code 和 OpenCode 等客户端提供 ZenTao MCP 认证和自然语言任务工作流的 Skill。它复用当前客户端已有的 ZenTao MCP，不是新的 MCP 服务。
 
 ## 功能
 
 - 指导为支持动态 Header Helper 的 MCP 客户端配置认证续期。
-- 指导 Codex 查询、匹配、创建和完成禅道任务，并避免重复写入或虚构工时。
+- 指导 Codex 或通过 OpenCode 本地 CLI-backed MCP 查询、匹配、创建和完成禅道任务，并避免重复写入或虚构工时。
 - 提供可配置工作日历的预计开始/完成日期与按班次、休息时间倒推的工时区间计算。
 - 在当前 MCP 缺少附件上传时，可用平台原生脚本将明确指定的需求文档上传到已创建任务。
 - 提供 Codex 和 Claude Code 的 ZenTao API V2 登录示例。
@@ -19,7 +19,7 @@
 | --- | --- |
 | Codex（Windows、macOS） | 支持 ZenTao Header Helper 配置 |
 | Claude Code（Windows、macOS） | 支持 ZenTao Header Helper 配置 |
-| OpenCode | 当前配置示例不支持命令型 Header Helper |
+| OpenCode | 使用 `zentao-cli` 本地 stdio MCP；不依赖命令型 Header Helper |
 | DeepSeek API | 模型服务，不是 MCP 客户端；需通过支持 MCP 的客户端连接服务 |
 
 ZenTao 示例使用固定的公司服务地址，不能直接用于其他 ZenTao 实例。其他 MCP 服务请先确认其认证方式、客户端重试行为和令牌签发规则，再按 Skill 指引配置。
@@ -30,8 +30,9 @@ ZenTao 示例使用固定的公司服务地址，不能直接用于其他 ZenTao
 - Node.js 18+、npm 和 Git
 - Windows PowerShell 5.1（Windows）
 - macOS 自带的 Keychain 与 `security` 命令（macOS；无需安装 PowerShell）
-- Codex 或 Claude Code
+- Codex、Claude Code 或 OpenCode
 - ZenTao 账号，并且该实例允许使用 API V2 登录
+- 若使用 OpenCode：安装并登录 `zentao-cli`
 
 ## 安装
 
@@ -42,6 +43,8 @@ npx -y skills add chrisstarr7/zentao-tools -g -a codex -y
 macOS 和 Windows 使用同一条命令。它会将 Skill 安装到当前用户的 Codex；如需同时安装到 Claude Code，将 `-a codex` 改为 `-a codex claude-code`。安装后重启客户端或开启新会话。
 
 Codex 会从用户级 Skill 目录自动发现本 Skill，相关任务会按需读取，不需要手动加载。ZenTao 连接仍需运行一次下面的配置脚本以安全保存账号凭据；安装过程不会自动读取或猜测账号密码。
+
+OpenCode 也会从 `~/.agents/skills/zentao-tools/SKILL.md` 发现同一份 Skill；OpenCode 的 MCP 连接按下方“OpenCode（使用 zentao-cli）”配置。
 
 从旧名称 `mcp-token-renewal` 或 `zentao-token-renewal` 升级时，请安装新名称后重新运行一次配置脚本，以更新客户端中的 helper 路径。已保存的 macOS Keychain 凭据会继续使用。
 
@@ -63,18 +66,31 @@ node "$HOME/.agents/skills/zentao-tools/setup.mjs"
 
 脚本会让你选择 Codex、Claude Code 或两者，检查客户端配置后，在本机提示输入禅道账号。Windows 使用隐藏密码提示并通过当前用户的 DPAPI 加密保存；macOS 使用系统 Keychain 密码提示保存密码，并由 Node.js helper 获取 token。写入前会备份已有配置；遇到不支持的配置格式或已有不同的 `zentao` 地址时会停止。
 
+### OpenCode（使用 zentao-cli）
+
+OpenCode 没有本 Skill 所需的动态 Header Helper。可用 `zentao-cli` 提供本地 stdio MCP：先完成 CLI 登录，再让 OpenCode 启动 CLI 的 MCP 服务。
+
+```sh
+zentao login
+opencode mcp add zentao-cli --global -- zentao mcp
+opencode mcp list
+```
+
+本地 MCP 进程复用 CLI 的已保存 Profile，不需要把 Token 写入 OpenCode 配置。Token 过期时，CLI 不保证自动重新登录；在本机重新运行 `zentao login`，然后重连 OpenCode MCP。不要使用会把 Token 写进客户端配置的方式。
+
 配置完成后重启所选客户端。不要在聊天中输入或发送账号密码。
 
 ## 验证
 
 - Codex：运行 `codex mcp list`，确认 `zentao` 已加载；再执行只读查询确认工具可用。
 - Claude Code：运行 `claude mcp list` 检查 MCP 配置，并在新会话中确认禅道工具可用。
+- OpenCode：运行 `opencode mcp list`，确认 `zentao-cli` 已连接；再执行只读查询确认工具可用。
 
 验证时使用只读查询，不要通过生产写操作或手动让令牌过期来测试。
 
 ## 任务与附件
 
-安装并配置后，可直接用自然语言要求 Codex 查询、创建或完成任务。创建请求应提供预计工时；如果需求、执行或目标任务有多个候选，Codex 会先展示候选。模板、匹配规则与完成前检查见 `references/`。
+安装并配置后，可直接用自然语言要求支持的 Agent 查询、创建或完成任务。创建请求必须提供预计工时和需求 ID；如果需求、执行或目标任务有多个候选，Agent 会先展示候选。模板、匹配规则与完成前检查见 `references/`。
 
 附件 helper 使用同一套 DPAPI/Keychain 凭据，不新增密码存储。它只接受明确提供的文档文件（当前本地上限 50 MiB），调用固定的公司 HTTPS 地址，不跟随重定向。ZenTao 官方文件 API 文档要求 v22+；公司实例的版本和权限需要单独验证。POST 成功与附件关联回读验证会分别报告。
 
