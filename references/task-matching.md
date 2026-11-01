@@ -2,7 +2,7 @@
 
 ## Verify the current account
 
-Use a trusted current-user endpoint when the live MCP exposes one. Otherwise, use the local saved account only after confirming that the active `zentao` MCP configuration uses this Skill's local header helper and the same fixed server URL. The bundled `account` command reveals account metadata only; it never reads or prints a password or token. If the configured authentication source cannot be tied to that account, ask the user or stop before writing.
+Use a trusted current-user endpoint when the live MCP exposes one. Otherwise, use the local saved account only after confirming that the active `zentao` MCP configuration uses this Skill's local header helper and the same fixed server URL. The bundled `account` command reveals account metadata only; it never reads or prints a password or token. If the configured authentication source cannot be tied to that account, explain the uncertainty and ask the user to confirm their ZenTao account instead of ending the workflow. For example: “无法可靠识别当前禅道登录人，请确认你的禅道账号；确认后我会继续创建并指派任务。” If a candidate has been verified, show its display name and exact account for confirmation. A display name alone may not be unique; clarify the account when needed. A user-confirmed account can be used as the intended assignee, but do not claim it proves who owns the MCP token. Keep the requested action pending, perform no write with an uncertain assignee, and continue after confirmation without another permission prompt.
 
 Run the account helper only when that binding needs checking:
 
@@ -14,7 +14,7 @@ Run the account helper only when that binding needs checking:
 node "$HOME/.agents/skills/zentao-tools/scripts/zentao/macos.mjs" account
 ```
 
-Do not treat the `assignedtome` query parameter as proof of identity. Compare returned assignees and statuses with the requested filter. If it returns mixed accounts, completed/cancelled tasks, or the same result as `all`, the filter is not trustworthy: use a verified account to filter returned tasks locally, or stop if the data cannot be scoped safely. Never call `get_users` and guess which person is the token owner.
+Do not treat the `assignedtome` query parameter as proof of identity. Compare returned assignees and statuses with the requested filter. If it returns mixed accounts, completed/cancelled tasks, or the same result as `all`, the filter is not trustworthy: use a verified or user-confirmed account to filter returned tasks locally; if the identity is still uncertain, explain and ask the user to confirm it before continuing. Never call `get_users` and guess which person is the token owner.
 
 ## Locate a task or execution
 
