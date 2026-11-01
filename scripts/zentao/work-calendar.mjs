@@ -7,7 +7,7 @@ export const DEFAULT_WORK_CALENDAR = Object.freeze({
   timeZone: 'Asia/Shanghai',
   workingDays: [1, 2, 3, 4, 5],
   dailyCapacityHours: 8,
-  workWindow: null,
+  workWindow: Object.freeze({ start: '09:00', breakStart: '12:00', breakEnd: '13:30', end: '18:30' }),
   holidays: [],
   makeupWorkdays: [],
 });
@@ -76,13 +76,13 @@ export function calculateWorkInterval({ hours, endTime, endDate, now = new Date(
   const holidays = new Set(calendar.holidays);
   const makeupDays = new Set(calendar.makeupWorkdays);
   let date = parseDate(endDate ?? todayInTimeZone(now, calendar.timeZone));
-  let cursor = Math.floor(timeMinutes(endTime ?? currentTimeInTimeZone(now, calendar.timeZone)) / 60) * 60;
-  if (cursor > shiftEnd) throw new Error('Current time is outside the configured work shift.');
-  if (!isWorkday(date, calendar, holidays, makeupDays)) {
+  let cursor = Math.floor(timeMinutes(endTime ?? currentTimeInTimeZone(now, calendar.timeZone)) / 30) * 30;
+  if (!isWorkday(date, calendar, holidays, makeupDays) || cursor <= shiftStart) {
     do { date = addDays(date, -1); }
     while (!isWorkday(date, calendar, holidays, makeupDays));
     cursor = shiftEnd;
   }
+  cursor = Math.min(cursor, shiftEnd);
   if (cursor > breakStart && cursor < breakEnd) cursor = breakStart;
   const actualEndDate = dateString(date);
   const actualEndTime = formatMinutes(cursor);
