@@ -1,42 +1,63 @@
-# MCP capabilities and failure handling
+# MCP 能力与失败处理
 
-## Inspect the live server
+## 实时检查
 
-Before a task workflow, inspect available ZenTao tool names and their input/output schemas. The live MCP may be older or narrower than ZenTao's current API documentation. Do not assume that a documented endpoint is exposed, that an optional response field is actually returned, or that an enum is accepted by the company instance.
+任务工作流开始前检查当前 MCP 或 CLI 的真实 schema。至少需要读取需求、执行、任务详情，以及创建和完成任务的能力。字段名、类型和响应结构以当前服务为准。
 
-OpenCode may connect through the local `zentao-cli` stdio MCP, whose tool names and arguments differ from the Codex company MCP. Match the required capabilities against the active tool list and use its live schema; do not assume the Codex operation names or payload shapes transfer unchanged.
+如果使用 CLI，先运行对应 `--help`。如果使用 MCP，先检查实时工具列表和参数；不要把 Codex MCP 的名称直接套到 OpenCode 的本地 CLI MCP。
 
-The task flow needs a way to read executions, tasks, stories, and task details, plus create/finish operations. Map creation values to the live schema's native fields (`executionID`, `module`, `story`, `type`, `assignedTo`, `name`, `pri`, `estimate`, `estStarted`, `deadline`) and finish values to `realStarted`, `finishedDate`, and `currentConsumed`. Inspect the actual field semantics and read-back precision; a string type alone does not prove clock-time precision. If the schema omits a needed field such as parent task, do not put it into `desc` as a substitute. If the detail tool omits needed fields, use a suitable task-list result or stop rather than fabricating state.
+## 写入结果
 
-## Attachment upload
+创建或完成错误分为：
 
-ZenTao's official API documents `POST /api.php/v2/files` with `multipart/form-data` fields `file`, `objectType=task`, and `objectID`, supported from ZenTao v22. The bundled native helper reuses the existing credential store and fixed HTTPS host. It has a 50 MiB local safety cap; that is a client limit, not a claim about the company's server limit.
+- 明确的业务失败：任务未创建或未完成。
+- 认证失败：进入安全登录恢复。
+- 权限失败：报告权限原因。
+- 网络或服务异常：请求可能成功，也可能失败，结果不明确。
 
-The current connected MCP may expose only file rename/delete operations and no multipart upload. If so, the Skill may use the bundled platform-native upload helper only for the exact user-provided file, after confirming the configured auth source and fixed host. Upload is a separate step after task creation. A successful POST response is not a successful read-back check; report attachment verification only if the task's returned file list confirms it. If the server omits attachment details, report upload accepted but association unverified. On timeout, check read-back first and do not retry if success is uncertain.
+后两类写入必须先查询任务状态。创建结果不明时按需求、负责人、名称和近期时间查找；完成结果不明时读取状态、工时和备注。无法确认时停止，禁止盲目重试。
 
-Run the Windows helper with `-FilePath` and `-TaskID`:
+## 认证边界
 
-```powershell
-& "$HOME\.agents\skills\zentao-tools\scripts\zentao\upload-attachment.ps1" -FilePath "<user-provided-document>" -TaskID <task-id>
-```
+Codex `http_headers_helper` 用于本地 HTTP MCP 提供动态请求头。客户端是否在 Token 过期后重新调用帮助器并重试，取决于客户端版本和外层 MCP HTTP 响应。普通 HTTP 200 工具结果中夹带的 `401` 不保证触发帮助器。
 
-On macOS, use the native Node helper:
+Claude `headersHelper` 只在客户端按文档把认证错误暴露给帮助器时生效。OpenCode 的 CLI MCP 不提供同等自动续期，需要 `zentao login` 后重连。
+
+CLI 路径可使用：
 
 ```sh
-node "$HOME/.agents/skills/zentao-tools/scripts/zentao/macos.mjs" upload "<user-provided-document>" <task-id>
+zentao login --web
+zentao login --no-browser
+zentao profile --effective --format json
 ```
 
-Do not follow redirects for credentialed requests. Reject non-regular files, unsupported document types, invalid task IDs, and oversized files. The helper must not print password or token values.
+恢复后先做只读查询。写操作再按上面的“写入结果”重新检查状态。
 
-## Expired token behavior
+## 错误策略命令
 
-Codex `http_headers_helper` is supported for locally connected HTTP MCP servers. Client retry behavior depends on the **outer MCP HTTP response** and current Codex version; a tool result that merely contains `HTTP 401` is not proof that the header helper ran.
+```sh
+node "$HOME/.agents/skills/zentao-tools/scripts/zentao/error-policy.mjs" --status 401 --source tool-result --operation create
+node "$HOME/.agents/skills/zentao-tools/scripts/zentao/error-policy.mjs" --status 403 --operation update
+node "$HOME/.agents/skills/zentao-tools/scripts/zentao/error-policy.mjs" --status 504 --operation finish
+```
 
-When a call reports an authentication error:
+策略会区分认证、权限、限流、服务端、网络、超时和业务错误，并标记是否允许登录、是否可重试、写入结果是否未知。
+`--operation` 使用 `read`、`create`、`update`、`start`、`finish`、`upload` 或 `assign`；无法识别的操作按写入失败处理，要求先查状态。
 
-1. Distinguish outer transport status from text or structured tool error.
-2. Never retry a task-creating or task-finishing operation immediately.
-3. If transport-level auth failure invoked the configured helper, make at most the client's documented retry and then inspect the target task before another write.
-4. If the upstream status was wrapped inside a normal HTTP 200 MCP response, explain that automatic header-helper recovery is not established. Do not claim that setting an error flag or printing `401` in tool content fixes transport-level retry.
+## 附件上传
 
-The public `easysoft/zentao-mcp` source checked for this upgrade converts upstream response status and body to ordinary tool text and returns the MCP result without `isError` for non-2xx responses. This is evidence about that source revision, not proof that the company's deployed gateway is identical. A real gateway fix needs its source and a transport-level mock test; it must not be deployed from this Skill repository.
+当前 MCP 缺少 multipart 上传时，可对用户明确指定的需求文档使用平台原生帮助器。上传是创建后的独立步骤；任务创建成功但上传失败时保留任务并分别报告。
+
+Windows：
+
+```powershell
+& "$HOME\.agents\skills\zentao-tools\scripts\zentao\upload-attachment.ps1" -FilePath "<文档>" -TaskID <任务ID>
+```
+
+macOS：
+
+```sh
+node "$HOME/.agents/skills/zentao-tools/scripts/zentao/macos.mjs" upload "<文档>" <任务ID>
+```
+
+帮助器复用 DPAPI 或 Keychain 凭据，限制文件类型、任务 ID 和 50 MiB 本地安全上限；不得打印或记录密码和 Token。

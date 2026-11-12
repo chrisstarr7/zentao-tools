@@ -1,5 +1,50 @@
-# Work calendar
+# 工作日历
 
-The work-hour rules in [team task standards](team-task-standards.md), section 4, are authoritative. Use `Asia/Shanghai` and exclude the required 12:00–13:30 lunch break from planned and actual work-hour totals. Use explicit conversation or saved project/user calendar settings for shift times, weekends, and holidays; never invent a shift.
+工时规则以 [团队任务标准](team-task-standards.md) 第四节为准。
 
-For planned clock-time estimates, round the current Beijing time down to a whole hour and calculate backwards across configured work segments. For task completion, follow section 4.3 of the team task standards: when the user has not supplied actual hours or an interval, use the task estimate and round the current Beijing time down to a half-hour to derive the default actual interval. Show the calculated interval and hours for explicit confirmation before writing. This is the user's reporting convention, not an activity log. If CLI fields only store dates, keep exact intervals in the confirmation conversation and do not claim ZenTao stores clock-time precision.
+## 默认日历
+
+- 时区：`Asia/Shanghai`
+- 工作日：周一至周五
+- 班次：`09:00–18:30`
+- 午休：`12:00–13:30`
+- 节假日和调休工作日：读取 `work-calendar.json`
+
+用户在当前对话中明确提供其他班次时优先使用；没有其他配置时直接使用默认值，不重复询问。
+
+## 计算口径
+
+计划和完成倒推使用同一套半小时对齐规则：
+
+1. 获取当前北京时间。
+2. 向下对齐到最近的 `00` 或 `30` 分钟。
+3. 如果该时刻不在工作段内，移动到最近的有效工作边界。
+4. 按用户提供或任务预估的工时向前累计。
+5. 跳过午休、非工作时间、周末和配置节假日。
+6. 早于当天上班时间时继续向前一个工作日倒推。
+
+任务描述和其他自由文本字段不写预计时间段。原生日期字段只能保存日期时，具体时段保留在对话确认中。
+
+## 完成倒推
+
+用户提供实际工时时，结束基准是当前时间向下对齐的半小时，不询问开始和结束时间。
+
+示例：
+
+- 当前 16:17，工时 2.5 小时：`13:30–16:00`
+- 当前 14:11，工时 3 小时：`09:30–12:00`、`13:30–14:00`
+- 当天剩余工作不足时，从上一工作日下班时间继续倒推。
+
+如果任务已有实际开始时间且与倒推结果冲突，展示冲突并核实。用户明确提供起止时间或工作段时，以用户提供的真实记录为准。
+
+## 命令
+
+```sh
+node "$HOME/.agents/skills/zentao-tools/scripts/zentao/work-calendar.mjs" --hours 2.5 --interval
+node "$HOME/.agents/skills/zentao-tools/scripts/zentao/work-calendar.mjs" --hours 3 --start 2026-11-12
+```
+
+配置文件：
+
+- Windows：`%APPDATA%\zentao-tools\work-calendar.json`
+- macOS：`~/.config/zentao-tools/work-calendar.json`

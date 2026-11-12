@@ -1,37 +1,48 @@
-# MCP Client Compatibility
+# 客户端兼容性
 
-Check current vendor documentation before configuration because client behavior can change. Distinguish the agent host that connects to MCP from the model provider that generates tool calls.
+| 客户端 | 推荐接入 | Token 过期处理 |
+| --- | --- | --- |
+| Codex | 禅道 MCP，或已登录 `zentao-cli` | MCP 连接级 401 可能由 `http_headers_helper` 恢复；普通工具结果中的 401 不保证自动重放。CLI 路径执行 `zentao login --web`。 |
+| Claude | 禅道 MCP，或已登录 `zentao-cli` | MCP 在客户端支持的 HTTP 401/403 流程下可调用 `headersHelper`；无法确认时改用 CLI 登录。 |
+| OpenCode | `zentao-cli` 本地 stdio MCP | Token 过期后执行 `zentao login` 并重连 MCP；当前不支持等价动态 Header Helper 自动续期。 |
 
-| Product | Role | Native relevant behavior | What that means for renewal |
-|---|---|---|---|
-| Codex | MCP client/agent host | Local Streamable HTTP MCP supports `http_headers_helper`. The current public configuration reference documents the helper setting but does not establish a retry guarantee for every version or gateway response. No helper for stdio or remote-executor connections. | Suitable for supplying fresh custom headers when Codex invokes the helper. Treat automatic retry as unverified until tested against the installed Codex version and the gateway's outer MCP HTTP response. The bundled ZenTao scripts support Windows and macOS. |
-| Claude Code | MCP client/agent host | Supports OAuth with automatic refresh/reconnect/retry after an expired OAuth token. For custom headers, `headersHelper` runs on connect and after tool-call HTTP 401/403, then reconnects and retries once. It runs fresh (not cached) and has a 10-second timeout. | Suitable for custom token renewal via a fast local helper. Keep secrets in the operating system credential store rather than relying on environment variables that may be stripped for project/plugin scoped servers. Do not assume every MCP error reaches the helper; confirm the server returns the documented HTTP status. The bundled ZenTao scripts support Windows and macOS. |
-| Claude Desktop / Claude web connectors | MCP client/agent host | Remote MCP connectors support authless and OAuth connections, configured through Claude's connector UI. The documented flow does not expose a local command-based header helper. | Use the service's compatible OAuth flow. The Claude Code `headersHelper` approach does not transfer to Claude Desktop/web connectors; custom ZenTao token renewal is not established through this UI. |
-| OpenCode | MCP client/agent host | Supports remote MCP headers/OAuth and local stdio MCP commands. It does not document a dynamic command-based header helper for custom ZenTao API tokens. | Prefer a local stdio MCP launched as `zentao mcp` so the CLI reads its saved Profile without putting the Token in OpenCode config. CLI-backed tool names and arguments can differ from Codex's ZenTao MCP, so inspect and map the live schema. If the CLI token expires, run `zentao login` and reconnect; automatic renewal is not established. |
-| DeepSeek API | Model provider | Supports function/tool calls; the application must execute the selected function and return its result. Its Responses API documents function tools and says MCP tool types are ignored. | Use DeepSeek through an MCP-capable host such as OpenCode. That host owns MCP connections and credentials. DeepSeek API tool calling alone is not an MCP client or token refresh manager. |
+## Codex
 
-## Host/provider examples
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "$HOME\.agents\skills\zentao-tools\setup.ps1"
+```
 
-- **Codex + ZenTao:** run `setup.ps1` on Windows or `setup.mjs` on macOS, select Codex, and enter credentials in the local prompt/Keychain prompt. Windows stores the password with DPAPI; macOS uses Keychain. It configures the local `http_headers_helper`. The helper setting alone does not prove the installed Codex version will retry a tool call after an expired token; confirm using a mock gateway or supported test environment, not by expiring a production token.
-- **Claude Code + ZenTao:** run `setup.ps1` on Windows or `setup.mjs` on macOS, select Claude Code, and enter credentials in the local prompt/Keychain prompt. Windows stores the password with DPAPI; macOS uses Keychain. It configures the HTTP MCP server's `headersHelper`. The helper must finish within Claude Code's 10-second timeout and print only the required JSON header object. Claude Code reruns it after a tool-call 401/403 and retries once; this does not prove ZenTao's gateway returns that status for an expired token.
-- **OpenCode + ZenTao CLI:** install and log in to `zentao-cli`, then configure `opencode mcp add zentao-cli --global -- zentao mcp`. This starts a local stdio MCP process which reads the CLI's saved Profile. Avoid `zentao add-mcp opencode` when it writes the Token into OpenCode config. Token-expiry recovery requires `zentao login` followed by reconnecting the MCP server; automatic renewal is not established.
-- **OpenCode + OAuth MCP:** use OpenCode's built-in remote MCP OAuth flow if the server advertises and implements compatible OAuth endpoints. For a custom `token` header based on ZenTao API V2 login, environment substitution alone is not automatic renewal.
-- **OpenCode + DeepSeek model + ZenTao MCP:** OpenCode remains the MCP host. DeepSeek supplies model responses/tool-call requests. Use the same CLI-backed local MCP path; do not configure the DeepSeek API key as the ZenTao token.
-- **Direct DeepSeek API integration:** the application must translate MCP tool definitions into DeepSeek function tools and dispatch calls itself. This is an application integration, not a DeepSeek MCP setting.
+```sh
+node "$HOME/.agents/skills/zentao-tools/setup.mjs"
+```
 
-## Shared Skill installation
+Windows 和 macOS 都只配置当前用户的 `zentao` MCP 条目。密码存入 DPAPI 或 Keychain。
 
-Codex and OpenCode discover shared Agent Skills under `~/.agents/skills`. Claude Code discovers personal Skills under `~/.claude/skills` and supports symlinked Skill folders. On Windows, a single canonical folder under `%USERPROFILE%\.agents\skills\zentao-tools` can be linked from `%USERPROFILE%\.claude\skills\zentao-tools` so these hosts use the same Skill and helper scripts. This Skill-folder integration applies to Claude Code; Claude Desktop's remote connectors are configured separately through its UI.
+## Claude
 
-## Official references
+使用同一 `setup.ps1` 或 `setup.mjs` 并选择 Claude。配置写入 `headersHelper`，不在 MCP 配置中保存 Token。
 
-- Codex MCP configuration: https://learn.chatgpt.com/docs/extend/mcp?surface=cli
-- Codex Skills: https://learn.chatgpt.com/docs/build-skills
-- Claude Code MCP authentication and `headersHelper`: https://code.claude.com/docs/en/mcp#authenticating-with-remote-mcp-servers
-- Claude Code Skills: https://code.claude.com/docs/en/skills
-- Claude Desktop remote MCP connectors: https://support.anthropic.com/en/articles/11503834-building-custom-connectors-via-remote-mcp-servers
-- OpenCode MCP servers and OAuth: https://opencode.ai/docs/mcp-servers
-- DeepSeek tool calls: https://api-docs.deepseek.com/guides/tool_calls
-- DeepSeek Responses API tool support: https://api-docs.deepseek.com/guides/responses_api
-- ZenTao API V2 login: https://www.zentao.net/book/api/post-users-login-2142.html
-- ZenTao MCP setup: https://www.zentao.net/book/zentaopms/mcp-2536.html
+帮助器必须在客户端超时限制内输出所需 JSON。服务端必须返回客户端可识别的认证状态；普通工具结果中的错误文本不保证触发重试。
+
+## OpenCode
+
+```sh
+zentao login
+opencode mcp add zentao-cli --global -- zentao mcp
+opencode mcp list
+```
+
+OpenCode 通过 CLI 保存的 Profile 连接，不把 Token 写入 OpenCode 配置。Token 失效后重新登录并重连本地 MCP。
+
+## 共同限制
+
+Skill 不能修改 MCP 传输层、后台监控 Token 或强制客户端重放请求。遇到包装认证错误时，安全登录入口可以恢复认证，但原写入仍要先检查实际状态。
+
+## 官方参考
+
+- Codex MCP：https://learn.chatgpt.com/docs/extend/mcp?surface=cli
+- Codex Skills：https://learn.chatgpt.com/docs/build-skills
+- Claude MCP 认证：https://code.claude.com/docs/en/mcp
+- Claude Skills：https://code.claude.com/docs/en/skills
+- OpenCode MCP：https://opencode.ai/docs/mcp-servers
+- ZenTao API V2 登录：https://www.zentao.net/book/api/post-users-login-2142.html

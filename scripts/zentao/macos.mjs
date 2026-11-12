@@ -76,7 +76,7 @@ export function updateClaudeConfig(source, helperCommand) {
 
   const entry = config.mcpServers[SERVER_NAME] ?? { type: 'http', url: SERVER_URL };
   if (!entry || Array.isArray(entry) || typeof entry !== 'object') throw new Error('Claude ZenTao entry must be a JSON object.');
-  if (entry.url && entry.url !== SERVER_URL) throw new Error('Existing Claude Code zentao server uses a different URL.');
+  if (entry.url && entry.url !== SERVER_URL) throw new Error('Existing Claude zentao server uses a different URL.');
   delete entry.headers;
   delete entry.headersHelper;
   delete entry.oauth;
@@ -341,7 +341,7 @@ async function removeCredentials() {
 
 export async function configureMacOS() {
   if (process.platform !== 'darwin') throw new Error('This setup command is for macOS.');
-  console.log('Select the client(s) to configure:\n  1. Codex\n  2. Claude Code\n  3. Both');
+  console.log('Select the client(s) to configure:\n  1. Codex\n  2. Claude\n  3. Both');
   const choice = await readLine('Choice (1-3): ');
   if (!['1', '2', '3'].includes(choice)) throw new Error('Select 1, 2, or 3.');
 

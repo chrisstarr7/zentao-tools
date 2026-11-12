@@ -66,6 +66,13 @@ test('rounds the Beijing time down to a half hour and skips lunch when counting 
   });
 });
 
+test('derives a 2.5-hour interval from 16:17 Beijing time without asking for times', () => {
+  assert.deepEqual(calculateWorkInterval({ hours: 2.5, endDate: '2026-11-12', endTime: '16:17' }), {
+    startDate: '2026-11-12', startTime: '13:30', endDate: '2026-11-12', endTime: '16:00', hours: 2.5,
+    segments: [{ date: '2026-11-12', startTime: '13:30', endTime: '16:00' }],
+  });
+});
+
 test('uses 13:30–16:30 for three hours at 16:50 Beijing time', () => {
   assert.deepEqual(calculateWorkInterval({ hours: 3, now: new Date('2026-11-02T08:50:00Z') }), {
     startDate: '2026-11-02', startTime: '13:30', endDate: '2026-11-02', endTime: '16:30', hours: 3,

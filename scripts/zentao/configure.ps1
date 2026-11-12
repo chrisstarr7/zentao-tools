@@ -92,7 +92,7 @@ function Get-ClaudeMcpConfigUpdate {
     if ($null -eq $config.mcpServers) { $config.mcpServers = [pscustomobject]@{} }
     $existing = $config.mcpServers.PSObject.Properties[$serverName]
     if ($existing -and $existing.Value.url -and $existing.Value.url -ne $serverUrl) {
-        throw "Existing Claude Code server '$serverName' uses a different URL; no config was changed."
+        throw "Existing Claude server '$serverName' uses a different URL; no config was changed."
     }
 
     if ($existing) {
@@ -129,7 +129,7 @@ if ($MyInvocation.InvocationName -ne '.') {
 
     Write-Host 'Select the client(s) to configure:'
     Write-Host '  1. Codex'
-    Write-Host '  2. Claude Code'
+    Write-Host '  2. Claude'
     Write-Host '  3. Both'
     $choice = Read-Host 'Choice (1-3)'
     if ($choice -notin @('1', '2', '3')) { throw 'Select 1, 2, or 3.' }

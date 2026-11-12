@@ -1,31 +1,38 @@
-# Task completion template
+# 任务完成模板
 
-Use this before marking a task complete. Completion requires an explicit user request. For a newly created task in a [combined create and complete request](task-workflow.md#create-and-complete), the request itself authorizes using the supplied hours and calculated planned interval as the actual record; no separate completion or matching-actuals confirmation is required. For other completion requests, use supplied or verified actuals, or the user's confirmation of completion as planned.
+完整完成流程见 [团队任务标准](team-task-standards.md) 第九节。
 
-## Preflight
+## 时间
 
-1. Resolve the exact task ID and read its status, current assignee, existing actual start, and existing consumed hours from available MCP results.
-2. If the task is already `done`, return its existing result without writing or adding hours again. Do not complete `closed` or `cancel` tasks.
-3. For the newly created task in an explicit combined request, use the interval calculated once during creation for actual start/finish and the supplied hours for this completion's consumed hours. Explicit actual dates/hours take precedence. Otherwise require actual start/finish and consumed hours from the user or verified task/work-log evidence; reuse planned values only if the user confirms completion as planned. Do not apply the combined shortcut to an unrelated or pre-existing task.
-4. Distinguish actual hours from the task estimate. Do not set total consumed to `old total + current hours` and also send `currentConsumed` unless the live API contract explicitly requires both.
+- 用户提供实际工时时，从当前北京时间向下对齐半小时并向前倒推。
+- 跳过午休、非工作时间、周末和配置节假日。
+- 用户提供实际起止时间时使用用户数据。
+- 用户未提供工时时，按既定口径使用预估工时并标注“按默认口径推算”。
+- 已有实际开始冲突时先展示冲突。
 
-## Structured completion record
-
-Map actual dates and hours to the finish operation's native fields: `realStarted`, `finishedDate`, and `currentConsumed`. Use exact date-time values when the live API accepts them; otherwise pass its supported date format and preserve the actual clock-time interval in the completion comment. `currentConsumed` is this completion's hours; for the combined request it defaults to the same supplied hours used for `estimate`. Do not send a cumulative `consumed` value as well unless the live API explicitly requires it. Keep the comment to outcomes, verification, follow-up and actual time precision the native fields cannot store.
-
-Recommended comment:
+## 完整备注
 
 ```text
+完成状态：任务已完成
 实际完成内容：
-- <delivered item>
-- <delivered item>
+- <具体交付的功能、业务逻辑和数据处理能力>
+实现过程：
+- <主要实现方式、关键业务处理、数据流转和异常场景>
+需求符合情况：
+- <逐项对照需求和验收标准>
 验证结果：
-- <check performed and its result; mark anything not run as unverified>
-遗留问题：<known follow-up, or omit if none>
+- <实际执行的测试、检查和结果；未执行部分明确标注>
+遗留问题：<后续事项；没有则写“无”>
 ```
 
-When the native start/finish fields cannot represent the actual clock-time interval or its breaks, include the actual interval segments in the comment. Otherwise keep times and hours in their native fields and omit duplicate metadata from the comment. Reusing planned dates/hours as actuals is authorized by the explicit combined request for the newly created task, or by the user's confirmation of completion as planned. Outside those cases, do not infer actuals from an estimate alone. Reusing the interval does not establish a test result or justify inventing delivered work.
+正式展示和写入前执行：
 
-## Write and verify
+```sh
+node "$HOME/.agents/skills/zentao-tools/scripts/zentao/task-quality.mjs" completion --file completion.md
+```
 
-Call the live finish operation once with the actual data and a concise comment. Do not call the close operation. Read the task back and confirm `done`; if the tool only returns a generic status or a transport result is ambiguous, do not claim the final state was verified and do not repeat the finish call without checking the task first.
+必须达到 5/5。不得编造实现、测试或验收结果。
+
+## 写入
+
+将实际开始、实际完成、本次工时和完成备注映射到 `realStarted`、`finishedDate`、`currentConsumed`、`comment`。使用 `task finish`，不用 `task close`。写后读取任务，确认 `done`、工时和六项备注完整。
