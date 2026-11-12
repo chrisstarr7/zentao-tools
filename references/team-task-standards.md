@@ -233,16 +233,34 @@ node "$HOME/.agents/skills/zentao-tools/scripts/zentao/task-quality.mjs" complet
 1. 展示任务 ID、名称、实际工作段、本次工时、完整完成备注和评分。
 2. 确认后写入 `realStarted`、`finishedDate`、`currentConsumed` 和 `comment`。CLI 时间精确到秒时，将计算出的分钟值补 `:00`。
 3. 使用 `task finish`，禁止用 `task close` 替代。
-4. 重新读取任务，确认状态为 `done`、实际工时正确、完成备注六项完整。
+4. 使用 `zentao task <id> --format raw` 重新读取任务，确认状态为 `done`、实际起止时间正确，并从最后一次 `finished` 动作核对完成备注和 `consumed` 变更。
 5. 响应不明时先查询，不重复完成。
 
-可将核验得到的规范化数据写入 `readback.json` 后检查：
+完成前把已读取的累计工时和最终确认值写入 `completion-readback.json`。`consumedBefore` 取写入前任务的 `consumed`，`currentConsumed` 是用户确认的本次工时，`consumedAfter` 是预计写入后的累计值：
 
-```sh
-node "$HOME/.agents/skills/zentao-tools/scripts/zentao/task-policy.mjs" readback --file readback.json
+```json
+{
+  "taskId": "6163",
+  "storyId": "2837",
+  "assignedTo": "panglei",
+  "type": "devel",
+  "estimate": 2,
+  "realStarted": "2026-11-04 14:30:00",
+  "finishedDate": "2026-11-04 16:30:00",
+  "consumedBefore": 0,
+  "currentConsumed": 2,
+  "consumedAfter": 2,
+  "comment": "<与最终确认完全一致的六项完成备注>"
+}
 ```
 
-必须包含 `status`、`actualHours`、`expectedHours`、`comment`、`expectedComment`。退出码非零表示状态、工时或实际保存内容未通过核验。
+写入后执行：
+
+```sh
+node "$HOME/.agents/skills/zentao-tools/scripts/zentao/task-policy.mjs" verify-completion --task 6163 --expected-file completion-readback.json
+```
+
+脚本会直接执行 `zentao task 6163 --format raw`，核对任务 ID、状态、需求、负责人、类型、预估工时、实际起止时间和累计工时，并从最后一次 `finished` 动作核对 `consumed` 从 `consumedBefore` 到 `consumedAfter` 的变化，确认本次消耗等于 `currentConsumed`。完成备注只读取该动作实际保存的 `comment`，不接受 Agent 另行整理的“实际值”。退出码非零表示任务字段、工时或实际保存内容未通过核验。
 
 ## 十、异常恢复
 

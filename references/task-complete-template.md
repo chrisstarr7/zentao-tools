@@ -35,4 +35,12 @@ node "$HOME/.agents/skills/zentao-tools/scripts/zentao/task-quality.mjs" complet
 
 ## 写入
 
-将实际开始、实际完成、本次工时和完成备注映射到 `realStarted`、`finishedDate`、`currentConsumed`、`comment`。使用 `task finish`，不用 `task close`。写后读取任务，确认 `done`、工时和六项备注完整。
+将实际开始、实际完成、本次工时和完成备注映射到 `realStarted`、`finishedDate`、`currentConsumed`、`comment`。使用 `task finish`，不用 `task close`。
+
+完成前读取任务的累计 `consumed` 作为 `consumedBefore`，计算 `consumedAfter = consumedBefore + currentConsumed`，将最终确认值写入 `completion-readback.json`。写后执行：
+
+```sh
+node "$HOME/.agents/skills/zentao-tools/scripts/zentao/task-policy.mjs" verify-completion --task <任务ID> --expected-file completion-readback.json
+```
+
+脚本直接读取 `zentao task <任务ID> --format raw`，核对任务字段、最后一次 `finished` 动作、本次工时、累计工时变化和实际保存的完成备注。退出码非零时不得声称完成成功。

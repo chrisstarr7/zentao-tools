@@ -52,7 +52,8 @@ description: 管理禅道 MCP 或 CLI 认证，并查询、创建、更新、指
 node "$HOME/.agents/skills/zentao-tools/scripts/zentao/task-quality.mjs" description --file task.md --story 2796
 node "$HOME/.agents/skills/zentao-tools/scripts/zentao/task-quality.mjs" completion --file completion.md
 node "$HOME/.agents/skills/zentao-tools/scripts/zentao/task-policy.mjs" assignee --profile-account panglei
+node "$HOME/.agents/skills/zentao-tools/scripts/zentao/task-policy.mjs" verify-completion --task 6163 --expected-file completion-readback.json
 node "$HOME/.agents/skills/zentao-tools/scripts/zentao/work-calendar.mjs" --hours 2.5 --interval
 ```
 
-退出码非零表示未达到写入门槛。根据 JSON 中的 `issues` 修正后重新检查，不得直接修改分数。
+`verify-completion` 必须直接读取 `zentao task <id> --format raw`，同时核对任务原生字段、最后一次 `finished` 动作及 `consumed` 变更前后的工时。退出码非零表示未达到写入门槛或写后核验失败。根据 JSON 中的 `issues` 修正后重新检查，不得直接修改分数。
